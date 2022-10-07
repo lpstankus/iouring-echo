@@ -79,18 +79,18 @@ fn handleCompletion(cqe: linux.io_uring_cqe) MuxErr!void {
     const context = @bitCast(UringContext, cqe.user_data);
     switch (context) {
         .accept => |list_sock| {
-            const new_sock = cqe.res;
+            const new_sock = if (cqe.res > 0) cqe.res else return;
             const id = try conn.add(new_sock);
             try uringRecv(id);
             try uringAccept(list_sock);
         },
         .send => |id| {
-            if (cqe.res == 0) return conn.remove(id);
+            if (cqe.res <= 0) return conn.remove(id);
             conn.bufs[id].commitPop(@intCast(usize, cqe.res)) catch return error.Unexpected;
             try uringRecv(id);
         },
         .recv => |id| {
-            if (cqe.res == 0) return conn.remove(id);
+            if (cqe.res <= 0) return conn.remove(id);
             conn.bufs[id].commitPush(@intCast(usize, cqe.res)) catch return error.Unexpected;
             try uringSend(id);
         },
